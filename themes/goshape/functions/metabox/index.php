@@ -1,0 +1,15 @@
+<?php
+require_once('vitrine-home.php');
+require_once('vitrine-programacao.php');
+require_once('post-videos.php');
+require_once('noticias.php');
+/*
+require_once('eventos.php');
+require_once('circuitos.php');
+require_once('obras.php');
+require_once('galerias.php');
+require_once('apoiadores.php');
+require_once('apoio_institucional.php');
+require_once('patrocinadores.php');
+*/
+?>

@@ -1,0 +1,175 @@
+<?php
+/**
+ * @package Wm Lista de E-mails para Newsletter
+ * @version 1.0
+ */
+/* 
+Plugin Name: Wm Simple Newsletter
+Plugin URI:
+Description: Plugin para cadastro e listagem de e-mails para newsletter
+Author: Wm! Estudio
+Version: 1.0
+Author URI: http://wmestudio.com.br/
+*/
+class WmSimpleNewsletter
+{
+    public $minium_WP   = '3.0';
+    public $version     = '1.0';
+    private static $wpdb;
+    private $aCurrentUser;
+    private $aSuperUser;
+
+    /*
+     * VERIFICA SE VERSÃO DO WORDPRESS É IGUAL OU SUPERIOR A REQUERIDA
+     */
+    function versao_funcional()
+    {
+        global $wp_version;
+
+        // Verifica a versão do wp instalada
+        $wp_ok = version_compare( $wp_version, $this->minium_WP, '>=' );
+
+        if ( ( $wp_ok == FALSE ) )
+        {
+            add_action(
+                'admin_notices',
+                create_function( '', 'global $oOS; printf (\'<div id="message" class="error"><p><strong>\' . __(\'Desculpe, O Sistema de OS funciona apenas nas versões do WordPress %s ou Superior, as funcionalidades não foram ativadas\', "OS" ) . \'</strong></p></div>\', $oOS->minium_WP );' )
+            );
+            return false;
+        }
+        return true;
+    }
+    
+    public function  __construct()
+    {
+        if ( ( !$this->versao_funcional() ) )
+        {
+            return false;
+        }
+        
+        add_action( 'init', array( &$this, 'init_plugin' ) );
+        
+        
+        // Inclusão de arquivo para utilização da função wp_get_current_user
+        require_once( ABSPATH . 'wp-includes/pluggable.php' );
+        $this->aCurrentUser = wp_get_current_user();
+        $this->aSuperUser = get_super_admins();
+
+        //A classe wpdb é responsável por estabelecer uma comunicação direta...
+        //...com o banco de dados usado pelo WordPress
+        global $wpdb;
+        self::$wpdb = $wpdb;
+
+        //define o nome da tabela que será usada
+        $wpdb->WmNewsletterEmails = self::$wpdb->prefix . "WmNewsletterEmails";
+
+
+        // Utilização de funções nativas do wordpress que executarão ações
+        // de criar e excluir a tabela do banco de dados de acordo com a ativação e desativação do plugin
+        register_activation_hook( ( __FILE__ ), array( &$this, "create_table" ) );
+        register_deactivation_hook( ( __FILE__ ), array( &$this, "unistall_plugin" ) );
+    }
+
+    public function create_table()
+    {
+        // upgrade function changed in WordPress 2.3 inserido para utilização da função dbDelta
+        //função para criação de tabelas no wordpress
+	require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+
+	// adiciona charset & collate ao core
+	$charset_collate = '';
+        $wpdb = self::$wpdb;
+        // Verifica se a versão atual do mysql é compatível para utilização dos dados
+        if ( version_compare( mysql_get_server_info(), '4.1.0', '>=' ) )
+        {
+            if ( !empty( self::$wpdb->charset ) )
+            {
+                $charset_collate = "DEFAULT CHARACTER SET " . self::$wpdb->charset;
+            }
+            if ( !empty( self::$wpdb->collate ) )
+            {
+                $charset_collate .= " COLLATE " . self::$wpdb->collate;
+            }
+	}
+
+        if ( self::$wpdb->get_var( "SHOW TABLES LIKE '" . $wpdb->WmNewsletterEmails . "'" ) != $wpdb->WmNewsletterEmails )
+        {
+            $sWmNewsletterEmails =
+                "CREATE TABLE IF NOT EXISTS " . $wpdb->WmNewsletterEmails . " (
+                `ID` INT(11) NOT NULL AUTO_INCREMENT,
+                `data_cadastro` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `email_newsletter` VARCHAR(255) DEFAULT NULL,
+                PRIMARY KEY (`ID`) ) ENGINE=InnoDB $charset_collate;";
+
+            dbDelta( $sWmNewsletterEmails );
+        }
+    }
+
+    public function delete_table()
+    {
+        $wpdb = self::$wpdb;
+        self::$wpdb->query( "DROP TABLE IF EXISTS " . $wpdb->WmNewsletterEmails );
+    }
+
+    public function unistall_plugin()
+    {
+        $this->delete_table();
+    }
+
+
+    //----funções para menu administrador---
+    function open_page_admin()
+    {
+        switch( $_GET['page'] )
+        {
+            case 'list-emails':
+                include_once( plugin_dir_path( __FILE__ ) . 'admin/lista_emails.php' );   // lista de usuarios
+                break;
+            default:
+                echo "Página não encontrada";
+                break;
+            }
+    }
+    
+    public function add_menu_admin()
+    {
+        global $wp_roles;
+
+        // Adiciona capabilitys para permissão de acesso as páginas por administradores
+        $role = get_role( "administrator" );
+        $role->add_cap( "Wm Newsletter" );
+        if ( function_exists( 'add_menu_page' ) )
+        {
+            add_menu_page( "Wm Newsletter", "Wm Newsletter", null, "WmNewsletter" );
+            add_submenu_page( "WmNewsletter", "Lista Newsletter", "Lista Newsletter", "Wm Newsletter", "list-emails", array( &$this, 'open_page_admin' ) );
+            remove_submenu_page( "WmNewsletter", "WmNewsletter" );
+        }
+    }
+    //----fim funções para menu administrador---
+    
+    public function front_cadastro_email()
+    {
+        include_once( plugin_dir_path( __FILE__ ) . 'front/cadastra_email.php' );
+    } 
+    
+    public function init_plugin()
+    {
+        wp_register_script( 'jquery-validate', plugin_dir_url( __FILE__ ) . 'inc/js/jquery.validate.min.js' );        
+        wp_enqueue_script( 'jquery-validate' );   
+
+        if ( is_super_admin() || is_admin() )
+        {
+            add_action( 'admin_menu', array( &$this, 'add_menu_admin' ) );
+        }
+        add_filter( 'front_cadastro_email', array( &$this, 'front_cadastro_email' ), 10 );
+    }
+
+}
+
+// Instancia da classe para ativação e desativação do plugin
+if ( !isset( $oWmSimpleNewsletter ) )
+{
+    global $oWmSimpleNewsletter;
+    $oWmSimpleNewsletter = new WmSimpleNewsletter();
+}
+?>
